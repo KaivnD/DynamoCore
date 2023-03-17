@@ -1,0 +1,2114 @@
+diff --git a/src/DynamoCore/App.config b/src/DynamoCore/App.config
+deleted file mode 100644
+index f9d8143fbe..0000000000
+--- a/src/DynamoCore/App.config
++++ /dev/null
+@@ -1,7 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<configuration>
+-  <appSettings>
+-      <add key="IDSDK_CLIENT_ID" value="No0wuv5G1sGm3mcMLrVuvS5qKFqxekiN"/>
+-      <add key="IDSDK_ENVIRONMENT" value=""/>
+-  </appSettings>
+-<startup><supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.8"/></startup></configuration>
+diff --git a/src/DynamoCore/Configuration/IPreferences.cs b/src/DynamoCore/Configuration/IPreferences.cs
+index 74ee4bc469..b206033205 100644
+--- a/src/DynamoCore/Configuration/IPreferences.cs
++++ b/src/DynamoCore/Configuration/IPreferences.cs
+@@ -62,11 +62,6 @@ public interface IPreferences
+         /// </summary>
+         bool IsAnalyticsReportingApproved { get; set; }
+ 
+-        /// <summary>
+-        /// Indicates whether ADP analytics reporting is approved or not.
+-        /// </summary>
+-        bool IsADPAnalyticsReportingApproved { get; set; }
+-
+         /// <summary>
+         /// Indicates first run
+         /// </summary>
+diff --git a/src/DynamoCore/Configuration/PreferenceSettings.cs b/src/DynamoCore/Configuration/PreferenceSettings.cs
+index b723a11154..a71c9e85db 100644
+--- a/src/DynamoCore/Configuration/PreferenceSettings.cs
++++ b/src/DynamoCore/Configuration/PreferenceSettings.cs
+@@ -110,21 +110,6 @@ public class PreferenceSettings : NotificationObject, IPreferences, IRenderPreci
+         /// </summary>
+         public bool IsAnalyticsReportingApproved { get; set; }
+ 
+-        /// <summary>
+-        /// Indicates whether ADP analytics reporting is approved or not.
+-        /// Note that the getter will communicate to a analytics server which might be slow.
+-        /// This API should only be used in UI scenarios (not in performance sensitive areas)
+-        /// </summary>
+-        [XmlIgnore]
+-        [Obsolete("API obsolete - This is an internal API and should not be used.")]
+-        public bool IsADPAnalyticsReportingApproved
+-        {
+-            get
+-            {
+-                return AnalyticsService.IsADPOptedIn;
+-            }
+-            set { throw new Exception("do not use"); }
+-        }
+         #endregion
+ 
+         #region UI & Graphics settings
+diff --git a/src/DynamoCore/Core/AuthenticationManager.cs b/src/DynamoCore/Core/AuthenticationManager.cs
+deleted file mode 100644
+index 7e54ddfe4e..0000000000
+--- a/src/DynamoCore/Core/AuthenticationManager.cs
++++ /dev/null
+@@ -1,110 +0,0 @@
+-using System;
+-using Greg;
+-using Greg.AuthProviders;
+-
+-namespace Dynamo.Core
+-{
+-    /// <summary>
+-    ///     This is a wrapper for <see cref="IAuthProvider"/> functionality.
+-    ///     It is used for oxygen authentication.
+-    /// </summary>
+-    public class AuthenticationManager
+-    {
+-        private readonly IAuthProvider authProvider;
+-
+-        /// <summary>
+-        ///     Occurs when login state is changed
+-        /// </summary>
+-        public event Action<LoginState> LoginStateChanged;
+-
+-        /// <summary>
+-        ///     Determines if the this.client has login capabilities
+-        /// </summary>
+-        public bool HasAuthProvider
+-        {
+-            get { return authProvider != null; }
+-        }
+-
+-        /// <summary>
+-        ///     Specifies whether the user is logged in or not.
+-        /// </summary>
+-        public LoginState LoginState
+-        {
+-            get { return HasAuthProvider ? authProvider.LoginState : LoginState.LoggedOut; }
+-        }
+-
+-        internal bool IsLoggedIn()
+-        {
+-            return HasAuthProvider && authProvider.LoginState == LoginState.LoggedIn ? true : false;
+-        }
+-
+-        /// <summary>
+-        ///     The username of the current user, if logged in.  Otherwise null
+-        /// </summary>
+-        public string Username
+-        {
+-            get { return HasAuthProvider ? authProvider.Username : ""; }
+-        }
+-
+-        /// <summary>
+-        /// Current IAuthProvider
+-        /// </summary>
+-        public IAuthProvider AuthProvider
+-        {
+-            get { return authProvider; }
+-        }
+-
+-        /// <summary>
+-        /// Initializes a new instance of the <see cref="AuthenticationManager"/> class.
+-        /// </summary>
+-        /// <param name="authProvider">IAuthProvider functionality</param>
+-        public AuthenticationManager(IAuthProvider authProvider)
+-        {
+-            this.authProvider = authProvider;
+-
+-            // The lack of AuthProvider indicates that the user cannot login for this
+-            // session.  Hence, we do not subscribe to this event.
+-            if (this.authProvider != null)
+-            {
+-                this.authProvider.LoginStateChanged += OnLoginStateChanged;
+-            }
+-        }
+-
+-
+-        /// <summary>
+-        /// Toggle current login state
+-        /// </summary>
+-        internal void ToggleLoginState(object o)
+-        {
+-            if (LoginState == LoginState.LoggedIn)
+-            {
+-                Logout();
+-            }
+-            else
+-            {
+-                Login();
+-            }
+-        }
+-
+-        internal void Login()
+-        {
+-            if (!HasAuthProvider) return;
+-            this.authProvider.Login();
+-        }
+-
+-        internal void Logout()
+-        {
+-            if (!HasAuthProvider) return;
+-            this.authProvider.Logout();
+-        }
+-
+-        private void OnLoginStateChanged(LoginState status)
+-        {
+-            if (LoginStateChanged != null)
+-            {
+-                LoginStateChanged(status);
+-            }
+-        }
+-
+-    }
+-}
+diff --git a/src/DynamoCore/Core/IDSDKManager.cs b/src/DynamoCore/Core/IDSDKManager.cs
+deleted file mode 100644
+index 92c81ecc15..0000000000
+--- a/src/DynamoCore/Core/IDSDKManager.cs
++++ /dev/null
+@@ -1,274 +0,0 @@
+-using System;
+-using System.Diagnostics;
+-using Autodesk.IDSDK;
+-using Greg;
+-using Greg.AuthProviders;
+-using RestSharp;
+-
+-namespace Dynamo.Core
+-{
+-    /// <summary>
+-    /// The class to provide auth APIs for IDSDK related methods.
+-    /// </summary>
+-    public class IDSDKManager : IOAuth2AuthProvider
+-    {
+-        /// <summary>
+-        /// Used by the auth provider to request authentication.
+-        /// </summary>
+-        public event Func<object, bool> RequestLogin;
+-        /// <summary>
+-        /// Tracks any change in the login status.
+-        /// </summary>
+-        public event Action<LoginState> LoginStateChanged;
+-
+-        /// <summary>
+-        /// Returns the login status of the current session.
+-        /// </summary>
+-        /// <returns>LoginState Enum value</returns>
+-        public LoginState LoginState
+-        {
+-            get
+-            {
+-                var result = IDSDK_IsLoggedIn();
+-                return result ? LoginState.LoggedIn : LoginState.LoggedOut;
+-            }
+-        }
+-
+-        /// <summary>
+-        /// Returns the login status of the current session.
+-        /// </summary>
+-        /// <returns>Boolean Status Value</returns>
+-        public bool IsLoggedIn()
+-        {
+-            return LoginState == LoginState.LoggedIn;
+-        }
+-
+-        /// <summary>
+-        /// Triggers login using Auth API, if the user is not already logged in. 
+-        /// </summary>
+-        /// <returns>True, if login was successfull, else False</returns>
+-        public bool Login()
+-        {
+-            OnLoginStateChanged(LoginState.LoggingIn);
+-            var result = IDSDK_Login();
+-            OnLoginStateChanged(result ? LoginState.LoggedIn : LoginState.LoggedOut);
+-            return result;
+-        }
+-
+-        /// <summary>
+-        /// Logs out the user from the current session.
+-        /// </summary>
+-        public void Logout()
+-        {
+-            var res = IDSDK_Logout();
+-            OnLoginStateChanged(LoginState);
+-        }
+-
+-        /// <summary>
+-        /// Gets the username of the logged in user.
+-        /// </summary>
+-        public string Username
+-        {
+-            get
+-            {
+-                var result = IDSDK_GetUserInfo();
+-                return result != null ? result.UserName : String.Empty;
+-            }
+-        }
+-
+-        /// <summary>
+-        /// Used by the auth provider to sign request with the authorized token.
+-        /// </summary>
+-        public void SignRequest(ref RestRequest m, RestClient client)
+-        {
+-            if (LoginState == LoginState.LoggedOut && !Login())
+-            {
+-                throw new Exception("You must be logged in, to use the Package Manager.");
+-            }
+-            m.AddHeader("Authorization", $"Bearer {IDSDK_GetToken()}");
+-        }
+-
+-        /// <summary>
+-        /// Checks if the user is logged in and adds the token to request header.
+-        /// </summary>
+-        internal void LoginRequest(ref RestRequest m, RestClient client)
+-        {
+-            if (LoginState == LoginState.LoggedIn)
+-            {
+-                m.AddHeader("Authorization", $"Bearer {IDSDK_GetToken()}");          
+-            }
+-            else {
+-                throw new Exception("You must be logged in, to use this service.");
+-            }
+-        }
+-
+-        private void OnLoginStateChanged(LoginState state)
+-        {
+-            if (LoginStateChanged != null)
+-            {
+-                LoginStateChanged(state);
+-            }
+-        }
+-
+-        #region IDSDK methods
+-        private class IDSDK_User_Info {
+-            internal string UserId { get; set; }
+-            internal string UserFirstName { get; set; }
+-            internal string UserLastName { get; set; }
+-            internal string UserEmail { get; set; }
+-            internal string AnalyticsId { get; set; }
+-            internal string UserName { get; set; }
+-            internal IDSDK_User_Info(string userId, string userFirstName, string userLastName, string userEmail, string analyticsId, string userName) {
+-                UserId = userId;
+-                UserFirstName = userFirstName;
+-                UserLastName = userLastName;
+-                UserEmail = userEmail;
+-                AnalyticsId = analyticsId;
+-                UserName = userName;
+-            }
+-        }
+-        private bool IDSDK_Login()
+-        {
+-            if (IDSDK_IsLoggedIn())
+-            {
+-                return true;
+-            }
+-            else
+-            {
+-                if (Initialize())
+-                {
+-                    idsdk_status_code statusCode = Client.Login();
+-                    if (Client.IsSuccess(statusCode))
+-                    {
+-                        return true;
+-                    }
+-                }
+-                return false;
+-            }
+-        }
+-        private bool IDSDK_IsLoggedIn()
+-        {
+-            if (Initialize())
+-            {
+-                bool ret = Client.IsLoggedIn();
+-                return ret;
+-            }
+-            return false;
+-        }
+-        private bool IDSDK_Logout()
+-        {
+-            if (IDSDK_IsLoggedIn())
+-            {
+-                idsdk_status_code statusCode = Client.Logout(idsdk_logout_flags.IDSDK_LOGOUT_MODE_SILENT);
+-                if (Client.IsSuccess(statusCode))
+-                {
+-                    Deinitialize();
+-                    return true;
+-                }
+-            }
+-            return false;
+-        }
+-        private IDSDK_User_Info IDSDK_GetUserInfo()
+-        {
+-            if (Client.IsInitialized() && Client.IsLoggedIn())
+-            {
+-                idsdk_status_code statusCode = Client.GetUserInfo(out bool loginState, out string userId, out string userFirstName, out string userLastName,
+-                    out string userEmail, out string analyticsId, out string userName, out uint loginExpireDay);
+-
+-                IDSDK_User_Info strUserInfo = null;
+-                if (Client.IsSuccess(statusCode))
+-                {
+-                    strUserInfo = new IDSDK_User_Info(userId, userFirstName, userLastName, userEmail, analyticsId, userName);
+-                }
+-                return strUserInfo;
+-            }
+-            return null;
+-        }
+-        #endregion
+-
+-        #region IDSDK Utilities
+-        private bool SetProductConfigs(string productLineCode, idsdk_server server, string oauthKey)
+-        {
+-            idsdk_status_code bRet = Client.SetProductConfig(oauthKey, "", productLineCode, DateTime.Now.Year.ToString(), "1.2.3.4", server);
+-            return Client.IsSuccess(bRet);
+-        }
+-
+-        /// <summary>
+-        /// Returns the OAuth2 token for the current session, or an empty string if token is not available.
+-        /// </summary>
+-        private string IDSDK_GetToken()
+-        {
+-            idsdk_status_code ret = Client.GetToken(out string strToken);
+-            if (Client.IsSuccess(ret))
+-            {
+-                return strToken;
+-            }
+-            return String.Empty;
+-        }
+-
+-        private bool Initialize()
+-        {
+-            if (Client.IsInitialized()) return true;
+-            idsdk_status_code bRet = Client.Init();
+-
+-            if (Client.IsSuccess(bRet))
+-            {
+-                if (Client.IsInitialized())
+-                {
+-                    try
+-                    {
+-                        IntPtr hWnd = Process.GetCurrentProcess().MainWindowHandle;
+-                        if (hWnd != null)
+-                        {
+-                            Client.SetHost(hWnd);
+-                        }
+-
+-                        bool ret = GetClientIDAndServer(out idsdk_server server, out string client_id);
+-                        if (ret) 
+-                        {
+-                            ret = SetProductConfigs("Dynamo", server, client_id);
+-                            Client.SetServer(server);
+-                            return ret;
+-                        }
+-                    }
+-                    catch (Exception e)
+-                    {
+-                        return false;
+-                    }
+-                }
+-            }
+-            return false;
+-        }
+-        private bool Deinitialize()
+-        {
+-            idsdk_status_code bRet = Client.DeInit();
+-
+-            if (Client.IsSuccess(bRet))
+-            {
+-                return true;
+-            }
+-            return false;
+-        }
+-        private bool GetClientIDAndServer(out idsdk_server server, out string client_id)
+-        {
+-            server = idsdk_server.IDSDK_PRODUCTION_SERVER;
+-                
+-            client_id = DynamoUtilities.PathHelper.getServiceConfigValues(this, "IDSDK_CLIENT_ID");
+-
+-            string env = DynamoUtilities.PathHelper.getServiceConfigValues(this, "IDSDK_ENVIRONMENT");
+-            if (!string.IsNullOrEmpty(env))
+-            {
+-                if (env.Trim().ToLower() == "stg")
+-                {
+-                    server = idsdk_server.IDSDK_STAGING_SERVER;
+-                }
+-                else if (env.Trim().ToLower() == "dev")
+-                {
+-                    server = idsdk_server.IDSDK_DEVELOPMENT_SERVER;
+-                }
+-            }
+-            return !string.IsNullOrEmpty(client_id);
+-        }
+-        #endregion
+-    }
+-}
+diff --git a/src/DynamoCore/DynamoCore.csproj b/src/DynamoCore/DynamoCore.csproj
+index d577c8de1f..6254562b93 100644
+--- a/src/DynamoCore/DynamoCore.csproj
++++ b/src/DynamoCore/DynamoCore.csproj
+@@ -29,13 +29,7 @@
+     <Reference Include="Microsoft.CSharp" />
+   </ItemGroup>
+   <ItemGroup Label="Common dependencies">
+-    <PackageReference Include="Autodesk.IDSDK" Version="1.1.6" />
+-    <PackageReference Include="DynamoVisualProgramming.Analytics" Version="3.0.1.740" />
+-    <PackageReference Include="DynamoVisualProgramming.LibG_229_0_0" Version="2.18.0.665" GeneratePathProperty="true"/>
+-    <PackageReference Include="DynamoVisualProgramming.LibG_228_0_0" Version="2.18.0.665" GeneratePathProperty="true"/>
+-    <PackageReference Include="Greg" Version="2.3.0.2505" />
+-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" CopyXML="true" />
+-	  <PackageReference Include="RestSharp" Version="106.12.0" CopyXML="true" />
++    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+   </ItemGroup>
+   <ItemGroup>
+     <ProjectReference Include="..\Engine\GraphLayout\GraphLayout.csproj">
+@@ -67,10 +61,6 @@
+       <Project>{c0d6dee5-5532-4345-9c66-4c00d7fdb8be}</Project>
+       <Name>DesignScriptBuiltin</Name>
+     </ProjectReference>
+-    <ProjectReference Include="..\Libraries\DynamoUnits\Units.csproj">
+-      <Project>{6e0a079e-85f1-45a1-ad5b-9855e4344809}</Project>
+-      <Name>Units</Name>
+-    </ProjectReference>
+     <ProjectReference Include="..\Libraries\VMDataBridge\VMDataBridge.csproj">
+       <Project>{ccb6e56b-2da1-4eba-a1f9-e8510e129d12}</Project>
+       <Name>VMDataBridge</Name>
+@@ -110,76 +100,9 @@
+       <LastGenOutput>Resources.en-US.Designer.cs</LastGenOutput>
+     </EmbeddedResource>
+   </ItemGroup>
+-  <Choose>
+-    <When Condition=" '$(OS)' != 'Unix' ">
+-      <PropertyGroup>
+-        <PowerShellCommand>powershell.exe</PowerShellCommand>
+-      </PropertyGroup>
+-    </When>
+-    <Otherwise>
+-      <PropertyGroup>
+-        <PowerShellCommand>pwsh</PowerShellCommand>
+-      </PropertyGroup>
+-    </Otherwise>
+-  </Choose>
+-  <Target Name="BeforeBuildOps" BeforeTargets="Build">
+-    <PropertyGroup>
+-      <LibGProtoGeometryLibGLocale>$(PkgDynamoVisualProgramming_LibG_229_0_0)\tools\libg_locale</LibGProtoGeometryLibGLocale>
+-    </PropertyGroup>
+-    <ItemGroup>
+-      <LibGInterface Include="$(PkgDynamoVisualProgramming_LibG_229_0_0)\tools\netstandard2.0\$(LibGOsToken)\LibG.Interface.dll" />
+-      <LibGProtoGeometryDLL Include="$(PkgDynamoVisualProgramming_LibG_229_0_0)\tools\netstandard2.0\$(LibGOsToken)\ProtoGeometry.dll" />
+-      <LibGProtoGeometryXML Include="$(PkgDynamoVisualProgramming_LibG_229_0_0)\tools\netstandard2.0\$(LibGOsToken)\ProtoGeometry.XML" />
+-      <LibG229Deps Include="$(PkgDynamoVisualProgramming_LibG_229_0_0)\tools\netstandard2.0\$(LibGOsToken)\asm_deps.csproj" />
+-      <LibG228Deps Include="$(PkgDynamoVisualProgramming_LibG_228_0_0)\tools\netstandard2.0\$(LibGOsToken)\asm_deps.csproj" />
+-      <LibGProtoGeometryUICulture Include="$(PkgDynamoVisualProgramming_LibG_229_0_0)\tools\netstandard2.0\$(LibGOsToken)\$(UICulture)\*" />
+-      <LibG228 Include="$(PkgDynamoVisualProgramming_LibG_228_0_0)\tools\netstandard2.0\$(LibGOsToken)\LibG_228_0_0\*" />
+-      <LibG229 Include="$(PkgDynamoVisualProgramming_LibG_229_0_0)\tools\netstandard2.0\$(LibGOsToken)\LibG_229_0_0\*" />
+-      <ExternSimplexNoise Include="$(SolutionDir)..\extern\SimplexNoise\*" />
+-      <SampleFiles Include="$(SolutionDir)..\doc\distrib\Samples\**\*.*" />
+-      <NodeHelpFiles Include="$(SolutionDir)..\doc\distrib\NodeHelpFiles\**\*.*" />
+-      <OpenSourceLicenses Include="$(SolutionDir)..\doc\distrib\Open Source Licenses\**\*.*" />
+-      <LocalizedResources Include="$(SolutionDir)..\extern\Localized\**\*.*" />
+-      <LegacyBinariesToBinFolder Include="$(SolutionDir)..\extern\legacy_remove_me\bin\*" />
+-      <LegacyBinariesToNodesFolder Include="$(SolutionDir)..\extern\legacy_remove_me\nodes\*" />
+-    </ItemGroup>
+-    <Copy SourceFiles="$(SolutionDir)..\README.md" DestinationFiles="$(OutputPath)README.txt" />
+-    <Copy SourceFiles="$(SolutionDir)..\doc\distrib\License.rtf" DestinationFolder="$(OutputPath)" />
+-    <Copy SourceFiles="$(SolutionDir)..\doc\distrib\TermsOfUse.rtf" DestinationFolder="$(OutputPath)" />
+-    <Copy SourceFiles="$(SolutionDir)..\doc\distrib\GoogleAnalyticsConsent.rtf" DestinationFolder="$(OutputPath)" />
+-    <Copy SourceFiles="$(SolutionDir)..\doc\distrib\InstrumentationConsent.rtf" DestinationFolder="$(OutputPath)" />
+-    <Copy SourceFiles="$(SolutionDir)..\doc\distrib\ADPAnalyticsConsent.rtf" DestinationFolder="$(OutputPath)" />
+-    <Copy SourceFiles="@(NodeHelpFiles)" DestinationFolder="$(OutputPath)\en-US\fallback_docs\" />
+-    <Copy SourceFiles="@(OpenSourceLicenses)" DestinationFolder="$(OutputPath)Open Source Licenses\" />
+-    <Copy SourceFiles="@(LibGInterface)" DestinationFolder="$(OutputPath)" />
+-    <Copy SourceFiles="@(LibGProtoGeometryDLL)" DestinationFolder="$(OutputPath)" />
+-    <Copy SourceFiles="@(LibGProtoGeometryXml)" DestinationFolder="$(OutputPath)" />
+-    <Copy SourceFiles="@(LibGProtoGeometryXml)" DestinationFolder="$(OutputPath)\$(UICulture)" />
+-    <Copy SourceFiles="@(LibGProtoGeometryUICulture)" DestinationFolder="$(OutputPath)\$(UICulture)" />
+-    <Copy Condition="$(Platform.Contains('Linux'))" SourceFiles="@(LibG229Deps)" DestinationFolder="$(OutputPath)libg_228_0_0\asm_deps\" />
+-    <Copy Condition="$(Platform.Contains('Linux'))" SourceFiles="@(LibG228Deps)" DestinationFolder="$(OutputPath)libg_229_0_0\asm_deps\" />
+-    <Exec Command="$(PowerShellCommand) -ExecutionPolicy ByPass -Command Copy-Item -Path $(LibGProtoGeometryLibGLocale) -Destination $(OutputPath) -Recurse -Force" />
+-    <Copy SourceFiles="@(LibG228)" DestinationFolder="$(OutputPath)libg_228_0_0\" />
+-    <Copy SourceFiles="@(LibG229)" DestinationFolder="$(OutputPath)libg_229_0_0\" />
+-    <Copy SourceFiles="@(ExternSimplexNoise)" DestinationFolder="$(OutputPath)" />
+-    <Copy SourceFiles="@(SampleFiles)" DestinationFolder="$(OutputPath)samples\%(RecursiveDir)" />
+-    <Copy SourceFiles="@(LocalizedResources)" DestinationFolder="$(OutputPath)%(RecursiveDir)" />
+-    <Copy SourceFiles="$(ProjectDir)\BuiltInAndOperators\Operators.xml" DestinationFolder="$(OutputPath)\$(UICulture)" />
+-    <Copy SourceFiles="$(ProjectDir)\BuiltInAndOperators\BuiltIn.xml" DestinationFolder="$(OutputPath)\$(UICulture)" />
+-    <Copy SourceFiles="$(ProjectDir)\BuiltInAndOperators\BuiltIn.Migrations.xml" DestinationFolder="$(OutputPath)" />
+-    <!--Enable these if/when we need to keep old binaries for patch installer compatability-->
+-    <!--<Copy SourceFiles="@(LegacyBinariesToBinFolder)" DestinationFolder="$(OutputPath)" />
+-    <Copy SourceFiles="@(LegacyBinariesToNodesFolder)" DestinationFolder="$(OutputPath)\nodes\" />-->
+-    <Copy SourceFiles="$(SolutionDir)Config\upiconfig.xml" DestinationFolder="$(OutputPath)" /> 
+-  </Target>
++
+   <Target Name="AfterBuildOps" AfterTargets="ResolveSateliteResDeps">
+-    <ItemGroup>
+-      <ASMLibG Include="$(SolutionDir)..\extern\LibG_*\*" />
+-      <ExternProtoGeometry Include="$(SolutionDir)..\extern\ProtoGeometry\*" />
+-    </ItemGroup>
+-    <Copy SourceFiles="@(ASMLibG)" DestinationFolder="$(OutputPath)\%(RecursiveDir)" />
+-    <Copy SourceFiles="@(ExternProtoGeometry)" DestinationFolder="$(OutputPath)" />
+-        <!-- Get DynamoCore -->
++    <!-- Get DynamoCore -->
+         <GetAssemblyIdentity AssemblyFiles="$(OutDir)$(TargetName).dll">
+             <Output TaskParameter="Assemblies" ItemName="DynamoCoreInfo" />
+         </GetAssemblyIdentity>
+diff --git a/src/DynamoCore/Extensions/StartupParams.cs b/src/DynamoCore/Extensions/StartupParams.cs
+index 657074dd3b..140f8c05f7 100644
+--- a/src/DynamoCore/Extensions/StartupParams.cs
++++ b/src/DynamoCore/Extensions/StartupParams.cs
+@@ -4,7 +4,6 @@
+ using Dynamo.Library;
+ using Dynamo.Linting;
+ using Dynamo.Models;
+-using Greg;
+ 
+ namespace Dynamo.Extensions
+ {
+@@ -14,12 +13,6 @@ namespace Dynamo.Extensions
+     /// </summary>
+     public class StartupParams
+     {
+-        /// <summary>
+-        /// Returns <see cref="IAuthProvider"/> for DynamoModel
+-        /// </summary>
+-        public IAuthProvider AuthProvider { get { return authProvider; } }
+-        private readonly IAuthProvider authProvider;
+-
+         /// <summary>
+         /// Returns <see cref="IPreferences"/> for DynamoModel
+         /// </summary>
+@@ -62,56 +55,11 @@ public class StartupParams
+         /// </summary>
+         internal bool IsGeometryLibraryLoaded { get; private set; }
+ 
+-        /// <summary>
+-        /// Initializes a new instance of the <see cref="StartupParams"/> class.
+-        /// </summary>
+-        /// <param name="provider"><see cref="IAuthProvider"/> for DynamoModel</param>
+-        /// <param name="pathManager"><see cref="IPathManager"/> for DynamoModel</param>
+-        /// <param name="libraryLoader"><see cref="ILibraryLoader"/> for DynamoModel</param>
+-        /// <param name="customNodeManager"><see cref="ICustomNodeManager"/> for DynamoModel</param>
+-        /// <param name="dynamoVersion"><see cref="Version"/> for DynamoModel</param>
+-        /// <param name="preferences"><see cref="IPreferences"/> for DynamoModel</param>
+-        [Obsolete("Use internal constructor")]
+-        public StartupParams(IAuthProvider provider, IPathManager pathManager,
+-            ILibraryLoader libraryLoader, ICustomNodeManager customNodeManager,
+-            Version dynamoVersion, IPreferences preferences)
+-        {
+-            this.authProvider = provider;
+-            this.pathManager = pathManager;
+-            this.libraryLoader = libraryLoader;
+-            this.customNodeManager = customNodeManager;
+-            this.dynamoVersion = dynamoVersion;
+-            this.preferences = preferences;
+-        }
+-        [Obsolete("Use internal constructor")]
+-        /// <summary>
+-        /// Initializes a new instance of the <see cref="StartupParams"/> class.
+-        /// </summary>
+-        /// <param name="provider"><see cref="IAuthProvider"/> for DynamoModel</param>
+-        /// <param name="pathManager"><see cref="IPathManager"/> for DynamoModel</param>
+-        /// <param name="libraryLoader"><see cref="ILibraryLoader"/> for DynamoModel</param>
+-        /// <param name="customNodeManager"><see cref="ICustomNodeManager"/> for DynamoModel</param>
+-        /// <param name="dynamoVersion"><see cref="Version"/> for DynamoModel</param>
+-        /// <param name="preferences"><see cref="IPreferences"/> for DynamoModel</param>
+-        /// <param name="linterManager"><see cref="LinterManager"/> for DynamoModel></param>
+-        public StartupParams(IAuthProvider provider, IPathManager pathManager,
+-            ILibraryLoader libraryLoader, ICustomNodeManager customNodeManager,
+-            Version dynamoVersion, IPreferences preferences, LinterManager linterManager)
+-        {
+-            this.authProvider = provider;
+-            this.pathManager = pathManager;
+-            this.libraryLoader = libraryLoader;
+-            this.customNodeManager = customNodeManager;
+-            this.dynamoVersion = dynamoVersion;
+-            this.preferences = preferences;
+-            this.linterManager = linterManager;
+-        }
+         /// <summary>
+         /// Initializes a new instance of the <see cref="StartupParams"/> class.
+         /// </summary>
+         internal StartupParams(DynamoModel dynamoModel)
+         {
+-            this.authProvider = dynamoModel.AuthenticationManager?.AuthProvider;
+             this.pathManager = dynamoModel.PathManager;
+             this.libraryLoader = new ExtensionLibraryLoader(dynamoModel);
+             this.customNodeManager = dynamoModel.CustomNodeManager;
+diff --git a/src/DynamoCore/Logging/AnalyticsService.cs b/src/DynamoCore/Logging/AnalyticsService.cs
+deleted file mode 100644
+index 037c1f00ae..0000000000
+--- a/src/DynamoCore/Logging/AnalyticsService.cs
++++ /dev/null
+@@ -1,118 +0,0 @@
+-using Dynamo.Graph.Workspaces;
+-using Dynamo.Models;
+-using Autodesk.Analytics.ADP;
+-using Autodesk.Analytics.Core;
+-using System;
+-
+-namespace Dynamo.Logging
+-{
+-    /// <summary>
+-    /// Utility class to support analytics tracking.
+-    /// </summary>
+-    class AnalyticsService
+-    {
+-        // Use the Analytics.Core interface so that we do not have to load the ADP assembly at this time.
+-        private static IAnalyticsUI adpAnalyticsUI;
+-        /// <summary>
+-        /// Starts the client when DynamoModel is created. This method initializes
+-        /// the Analytics service and application life cycle start is tracked.
+-        /// </summary>
+-        /// <param name="model">DynamoModel</param>
+-        /// <param name="isHeadless">Analytics won't be started if IsHeadless, but ADP may be loaded to be disabled.</param>
+-        /// <param name="isTestMode">Analytics won't be started if isTestMode, ADP will not be loaded.</param>
+-        internal static void Start(DynamoModel model, bool isHeadless, bool isTestMode)
+-        {
+-            if (isTestMode)
+-            {
+-                if (Analytics.DisableAnalytics)
+-                {
+-                    model.Logger.Log("Incompatible configuration: [IsTestMode] and [Analytics disabled] ");
+-                }
+-                return;
+-            }
+-
+-            if (isHeadless)
+-            {
+-                return;
+-            }
+-
+-            // Initialize the concrete class only when we initialize the Service.
+-            // This will also load the Analytics.Net.ADP assembly
+-            // We must initialize the ADPAnalyticsUI instance before the Analytics.Start call.
+-            adpAnalyticsUI = new ADPAnalyticsUI();
+-
+-            Analytics.Start(new DynamoAnalyticsClient(model));
+-            model.WorkspaceAdded += OnWorkspaceAdded;
+-        }
+-
+-        static void OnWorkspaceAdded(WorkspaceModel obj)
+-        {
+-            if (obj is CustomNodeWorkspaceModel)
+-                Analytics.TrackScreenView("CustomWorkspace");
+-            else
+-                Analytics.TrackScreenView("Workspace");
+-        }
+-
+-        /// <summary>
+-        /// Indicates whether the user has opted-in to ADP analytics.
+-        /// As of ADP4 this will return true for most users.
+-        /// </summary>
+-        internal static bool IsADPOptedIn
+-        {
+-            get
+-            {
+-                if (Analytics.DisableAnalytics ||
+-                    adpAnalyticsUI == null)
+-                {
+-                    return false;
+-                }
+-                return adpAnalyticsUI.IsOptedIn(5,500);
+-            }
+-            
+-            set
+-            {
+-                if (Analytics.DisableAnalytics ||
+-                    adpAnalyticsUI == null)
+-                {
+-                    return;
+-                }
+-
+-                adpAnalyticsUI.SetOptedIn(value);
+-            }
+-            
+-        }
+-
+-        internal static bool IsADPAvailable()
+-        {
+-            return adpAnalyticsUI.IsProviderAvailable();
+-        }
+-
+-        /// <summary>
+-        /// Shuts down the client. Application life cycle end is tracked.
+-        /// </summary>
+-        internal static void ShutDown()
+-        {
+-            Analytics.ShutDown();
+-        }
+-
+-        /// <summary>
+-        /// Show the ADP dynamic consents dialog.
+-        /// </summary>
+-        /// <param name="host">main window</param>
+-        internal static void ShowADPConsetDialog(IntPtr? host)
+-        {
+-            if (!Analytics.DisableAnalytics && adpAnalyticsUI != null)
+-            {
+-                adpAnalyticsUI.ShowOptInDialog(System.Threading.Thread.CurrentThread.CurrentUICulture.Name, false, host);
+-            }
+-        }
+-        internal static string GetUserIDForSession()
+-        {
+-            if (Analytics.client is DynamoAnalyticsClient dac)
+-            {
+-                return dac.Session?.UserId;
+-            }
+-            return null;
+-        }
+-    }
+-}
+diff --git a/src/DynamoCore/Logging/DynamoAnalyticsClient.cs b/src/DynamoCore/Logging/DynamoAnalyticsClient.cs
+deleted file mode 100644
+index 2ace3c6dc8..0000000000
+--- a/src/DynamoCore/Logging/DynamoAnalyticsClient.cs
++++ /dev/null
+@@ -1,362 +0,0 @@
+-using System;
+-using System.Diagnostics;
+-using Autodesk.Analytics.ADP;
+-using Autodesk.Analytics.Core;
+-using Autodesk.Analytics.Events;
+-using Dynamo.Interfaces;
+-using Dynamo.Models;
+-using Microsoft.Win32;
+-
+-namespace Dynamo.Logging
+-{
+-    class DynamoAnalyticsSession : IAnalyticsSession
+-    {
+-        public DynamoAnalyticsSession()
+-        {
+-            UserId = GetUserID();
+-            SessionId = Guid.NewGuid().ToString();
+-        }
+-
+-        public void Start(DynamoModel model)
+-        {
+-            StabilityCookie.Startup();
+-        }
+-
+-        public void Dispose()
+-        {
+-            //Are we shutting down clean if so write 'nice shutdown' cookie
+-            if (DynamoModel.IsCrashing)
+-                StabilityCookie.WriteCrashingShutdown();
+-            else
+-                StabilityCookie.WriteCleanShutdown();
+-        }
+-
+-        public string UserId { get; private set; }
+-
+-        public string SessionId { get; private set; }
+-        [Obsolete("Do not use, will be removed, was only used by legacy instrumentation.")]
+-        public ILogger Logger => throw new NotImplementedException();
+-
+-        public static String GetUserID()
+-        {
+-            // The name of the key must include a valid root.
+-            const string userRoot = "HKEY_CURRENT_USER";
+-            const string subkey = "Software\\DynamoUXG";
+-            const string keyName = userRoot + "\\" + subkey;
+-
+-            // An int value can be stored without specifying the
+-            // registry data type, but long values will be stored
+-            // as strings unless you specify the type. Note that
+-            // the int is stored in the default name/value
+-            // pair.
+-
+-            var tryGetValue = Registry.GetValue(keyName, "InstrumentationGUID", null) as string;
+-
+-            if (tryGetValue != null)
+-            {
+-                Debug.WriteLine("Unique User id for Analytics found: " + tryGetValue);
+-                return tryGetValue;
+-            }
+-
+-            String newGUID = Guid.NewGuid().ToString();
+-            Registry.SetValue(keyName, "InstrumentationGUID", newGUID);
+-            Debug.WriteLine("New User id: " + newGUID);
+-            return newGUID;
+-        }
+-    }
+-
+-    /// <summary>
+-    /// Dynamo specific implementation of IAnalyticsClient
+-    /// </summary>
+-    class DynamoAnalyticsClient : IAnalyticsClient, IDisposable
+-    {
+-        /// <summary>
+-        /// A dummy IDisposable class
+-        /// </summary>
+-        class Dummy : IDisposable
+-        {
+-            public void Dispose() { }
+-        }
+-
+-#if DEBUG
+-        private const string ANALYTICS_PROPERTY = "UA-78361914-2";
+-#else
+-        private const string ANALYTICS_PROPERTY = "UA-52186525-1";
+-#endif
+-
+-        private readonly IPreferences preferences = null;
+-
+-        public static IDisposable Disposable { get { return new Dummy(); } }
+-
+-        private readonly ProductInfo product;
+-
+-        private readonly HostContextInfo hostInfo;
+-
+-        public virtual IAnalyticsSession Session { get; private set; }
+-
+-        /// <summary>
+-        /// Return if Analytics Client is allowed to send any analytics information (Google, ADP etc.)
+-        /// </summary>
+-        public bool ReportingAnalytics
+-        {
+-            get
+-            {
+-                return !Analytics.DisableAnalytics &&
+-                    Service.IsInitialized;
+-            }
+-        }
+-
+-        /// <summary>
+-        /// Return if Google Analytics Client is allowed to send analytics info
+-        /// </summary>
+-        private bool ReportingGoogleAnalytics
+-        {
+-            get
+-            {
+-                return preferences != null
+-                    && Service.IsInitialized
+-                    && !Analytics.DisableAnalytics
+-                    && preferences.IsAnalyticsReportingApproved;
+-            }
+-        }
+-
+-        /// <summary>
+-        /// Return if Analytics Client is allowed to send instrumentation info
+-        /// </summary>
+-        public bool ReportingUsage
+-        {
+-            get
+-            {
+-                return preferences != null
+-                  && Service.IsInitialized
+-                  && !Analytics.DisableAnalytics
+-                  && preferences.IsUsageReportingApproved;
+-            }
+-        }
+-
+-        /// <summary>
+-        /// Constructs DynamoAnalyticsClient with given DynamoModel
+-        /// </summary>
+-        /// <param name="dynamoModel">DynamoModel</param>
+-        public DynamoAnalyticsClient(DynamoModel dynamoModel)
+-        {
+-            //Set the preferences, so that we can get live value of analytics 
+-            //reporting approved status.
+-            preferences = dynamoModel.PreferenceSettings;
+-
+-            if (Session == null) Session = new DynamoAnalyticsSession();
+-
+-            //Setup Analytics service, and StabilityCookie.
+-            Session.Start(dynamoModel);
+-
+-            //Dynamo app version.
+-            var appversion = dynamoModel.AppVersion;
+-
+-            var hostName = string.IsNullOrEmpty(dynamoModel.HostName) ? "Dynamo" : dynamoModel.HostName;
+-
+-            hostInfo = new HostContextInfo() { ParentId = dynamoModel.HostAnalyticsInfo.ParentId, SessionId = dynamoModel.HostAnalyticsInfo.SessionId };
+-
+-            string buildId = String.Empty, releaseId = String.Empty;
+-            if (Version.TryParse(dynamoModel.Version, out Version version))
+-            {
+-                buildId = $"{version.Major}.{version.Minor}.{version.Build}"; // BuildId has the following format major.minor.build, ex: 2.5.1
+-                releaseId = $"{version.Major}.{version.Minor}.0"; // ReleaseId has the following format: major.minor.0; ex: 2.5.0
+-            }
+-            product = new ProductInfo() { Id = "DYN", Name = hostName, VersionString = appversion, AppVersion = appversion, BuildId = buildId, ReleaseId = releaseId };
+-        }
+-
+-        // TODO: Google analytics can be made available on dotnet6-windows (windows only)
+-        private void RegisterGATracker(Service service)
+-        {
+-#if NET48
+-            //Some clients such as Revit may allow start/close Dynamo multiple times
+-            //in the same session so register only if the factory is not registered.
+-            if (service.GetTrackerFactory(Autodesk.Analytics.Google.GATrackerFactory.Name) == null)
+-            {
+-                service.Register(new Autodesk.Analytics.Google.GATrackerFactory(ANALYTICS_PROPERTY));
+-                service.AddTrackerFactoryFilter(Autodesk.Analytics.Google.GATrackerFactory.Name, () => ReportingGoogleAnalytics);
+-            }
+-#endif
+-        }
+-
+-        private void RegisterADPTracker(Service service)
+-        {
+-            //Some clients such as Revit may allow start/close Dynamo multiple times
+-            //in the same session so register only if the factory is not registered.
+-            if (service.GetTrackerFactory(ADPTrackerFactory.Name) == null)
+-            {
+-                service.Register(new ADPTrackerFactory());
+-                service.AddTrackerFactoryFilter(ADPTrackerFactory.Name, () => ReportingAnalytics);
+-            }
+-        }
+-
+-        /// <summary>
+-        /// Starts the client when DynamoModel is created. This method initializes
+-        /// the Analytics service and application life cycle start is tracked.
+-        /// </summary>
+-        public void Start()
+-        {
+-            // Start Analytics service regardless of optin status.
+-            // Each track event will be enabled/disabled based on the corresponding optin status.
+-            // Ex. ADP will manage optin status internally
+-            if (preferences != null && !Analytics.DisableAnalytics)
+-            {
+-                //Register trackers
+-                var service = Service.Instance;
+-
+-                // Use separate functions to avoid loading the tracker dlls if they are not opted in (as an extra safety measure).
+-                // ADP will be loaded because opt-in/opt-out is handled/serialized exclusively by the ADP module.
+-
+-                // Register Google Tracker only if the user is opted in.
+-                if (preferences.IsAnalyticsReportingApproved)
+-                    RegisterGATracker(service);
+-
+-                // Always register ADP Tracker.
+-                // ADP manages opt in status internally.
+-                RegisterADPTracker(service);
+-
+-                //If not ReportingAnalytics, then set the idle time as infinite so idle state is not recorded.
+-                Service.StartUp(product, new UserInfo(Session.UserId), hostInfo, TimeSpan.FromMinutes(30));
+-                TrackPreferenceInternal("ReportingAnalytics", "", ReportingAnalytics ? 1 : 0);
+-            }
+-        }
+-
+-        public void ShutDown()
+-        {
+-            Dispose();
+-        }
+-
+-        public void TrackEvent(Actions action, Categories category, string description, int? value)
+-        {
+-            if (!ReportingAnalytics) return;
+-
+-            var e = AnalyticsEvent.Create(category.ToString(), action.ToString(), description, value);
+-            e.Track();
+-        }
+-
+-        public void TrackPreference(string name, string stringValue, int? metricValue)
+-        {
+-            if (!ReportingAnalytics) return;
+-
+-            TrackPreferenceInternal(name, stringValue, metricValue);
+-        }
+-
+-        private void TrackPreferenceInternal(string name, string stringValue, int? metricValue)
+-        {
+-            var e = AnalyticsEvent.Create(Categories.Preferences.ToString(), name, stringValue, metricValue);
+-            e.Track();
+-        }
+-
+-        public void TrackTimedEvent(Categories category, string variable, TimeSpan time, string description = "")
+-        {
+-            if (!ReportingAnalytics) return;
+-
+-            var e = new TimedEvent(time)
+-            {
+-                Category = category.ToString(),
+-                VariableName = variable,
+-                Description = description
+-            };
+-            e.Track();
+-        }
+-
+-        public void TrackScreenView(string viewName)
+-        {
+-            if (!ReportingAnalytics) return;
+-
+-            var e = new ScreenViewEvent(viewName);
+-            e.Track();
+-        }
+-
+-        public void TrackException(Exception ex, bool isFatal)
+-        {
+-            if (!ReportingAnalytics) return;
+-
+-            Service.TrackException(ex, isFatal);
+-        }
+-
+-        public IDisposable CreateTimedEvent(Categories category, string variable, string description, int? value)
+-        {
+-            if (!ReportingAnalytics) return Disposable;
+-
+-            var e = new TimedEvent()
+-            {
+-                Category = category.ToString(),
+-                VariableName = variable,
+-                Description = description,
+-                Value = value
+-            };
+-            //Timed event does not need startup tracking.
+-            return e;
+-        }
+-
+-        public IDisposable CreateCommandEvent(string name, string description, int? value)
+-        {
+-            if (!ReportingAnalytics) return Disposable;
+-
+-            var e = new CommandEvent(name) { Description = description, Value = value };
+-            e.Track();
+-            return e;
+-        }
+-
+-        public IDisposable TrackFileOperationEvent(string filepath, Actions operation, int size, string description)
+-        {
+-            if (!ReportingAnalytics) return Disposable;
+-
+-            var e = new FileOperationEvent()
+-            {
+-                FilePath = filepath,
+-                FileSize = size,
+-                FileAction = FileAction(operation),
+-                Description = description
+-            };
+-            e.Track();
+-            return e;
+-        }
+-
+-        private FileOperationEvent.Actions FileAction(Actions operation)
+-        {
+-            switch (operation)
+-            {
+-                case Actions.Delete:
+-                    return FileOperationEvent.Actions.FileDelete;
+-                case Actions.Open:
+-                    return FileOperationEvent.Actions.FileOpen;
+-                case Actions.Close:
+-                    return FileOperationEvent.Actions.FileClose;
+-                case Actions.Read:
+-                    return FileOperationEvent.Actions.FileRead;
+-                case Actions.Write:
+-                    return FileOperationEvent.Actions.FileWrite;
+-                case Actions.Save:
+-                    return FileOperationEvent.Actions.FileSave;
+-                case Actions.SaveAs:
+-                    return FileOperationEvent.Actions.FileSaveAs;
+-                case Actions.New:
+-                    return FileOperationEvent.Actions.FileNew;
+-                default:
+-                    break;
+-            }
+-            throw new ArgumentException("Invalid action for FileOperation.");
+-        }
+-
+-        [Obsolete("Function will be removed in Dynamo 3.0 as Dynamo will no longer support GA instrumentation.")]
+-        public void LogPiiInfo(string tag, string data)
+-        {
+-        }
+-
+-        public void Dispose()
+-        {
+-            // If the Analytics Client was initialized, shut it down.
+-            // Otherwise skip this step because it would cause an exception.
+-            if (Service.IsInitialized)
+-                Service.ShutDown();
+-
+-            if (Session != null)
+-            {
+-                Session.Dispose();
+-                Session = null;
+-            }
+-        }
+-    }
+-}
+diff --git a/src/DynamoCore/Models/DynamoModel.cs b/src/DynamoCore/Models/DynamoModel.cs
+index b5c68726e8..d164f37f1b 100644
+--- a/src/DynamoCore/Models/DynamoModel.cs
++++ b/src/DynamoCore/Models/DynamoModel.cs
+@@ -38,7 +38,6 @@
+ using Dynamo.Updates;
+ using Dynamo.Utilities;
+ using DynamoServices;
+-using Greg;
+ using Newtonsoft.Json;
+ using Newtonsoft.Json.Linq;
+ using ProtoCore;
+@@ -384,7 +383,6 @@ public IEnumerable<WorkspaceModel> Workspaces
+         /// <summary>
+         /// Returns authentication manager object for oxygen authentication.
+         /// </summary>
+-        public AuthenticationManager AuthenticationManager { get; set; }
+ 
+         internal static string DefaultPythonEngine { get; private set; }
+ 
+@@ -436,8 +434,6 @@ public void ShutDown(bool shutdownHost)
+             ShutDownCore(shutdownHost);
+             PostShutdownCore(shutdownHost);
+ 
+-            AnalyticsService.ShutDown();
+-
+             State = DynamoModelState.NotStarted;
+             OnShutdownCompleted(); // Notify possible event handlers.
+         }
+@@ -504,7 +500,6 @@ public interface IStartConfiguration
+             IUpdateManager UpdateManager { get; set; }
+             ISchedulerThread SchedulerThread { get; set; }
+             string GeometryFactoryPath { get; set; }
+-            IAuthProvider AuthProvider { get; set; }
+             IEnumerable<IExtension> Extensions { get; set; }
+             TaskProcessMode ProcessMode { get; set; }
+ 
+@@ -552,7 +547,6 @@ public struct DefaultStartConfiguration : IStartConfiguration
+             public IUpdateManager UpdateManager { get; set; }
+             public ISchedulerThread SchedulerThread { get; set; }
+             public string GeometryFactoryPath { get; set; }
+-            public IAuthProvider AuthProvider { get; set; }
+             public IEnumerable<IExtension> Extensions { get; set; }
+             public TaskProcessMode ProcessMode { get; set; }
+             public bool IsHeadless { get; set; }
+@@ -720,46 +714,7 @@ protected DynamoModel(IStartConfiguration config)
+             // or the feature flags client for web traffic reason.
+             if (!IsServiceMode && !areAnalyticsDisabledFromConfig && !Dynamo.Logging.Analytics.DisableAnalytics)
+             {
+-                // Start the Analytics service only when a session is not present.
+-                // In an integrator host, as splash screen can be closed without shutting down the ViewModel, the analytics service is not stopped.
+-                // So we don't want to start it when splash screen or dynamo window is launched again.
+-                if (Analytics.client == null)
+-                {
+-                    AnalyticsService.Start(this, IsHeadless, IsTestMode);
+-                }
+-                else if (Analytics.client is DynamoAnalyticsClient dac)
+-                {
+-                    if (dac.Session == null)
+-                    {
+-                        AnalyticsService.Start(this, IsHeadless, IsTestMode);
+-                    }
+-                }
+-
+-                //run process startup/reading on another thread so we don't block dynamo startup.
+-                //if we end up needing to control aspects of dynamo model or view startup that we can't make
+-                //event based/async then just run this on main thread - ie get rid of the Task.Run()
+-                var mainThreadSyncContext = new SynchronizationContext();
+-                Task.Run(() =>
+-                {
+-                    try
+-                    {
+-                        //this will kill the CLI process after cacheing the flags in Dynamo process.
+-                        using (FeatureFlags =
+-                                new DynamoUtilities.DynamoFeatureFlagsManager(
+-                                AnalyticsService.GetUserIDForSession(),
+-                                mainThreadSyncContext,
+-                                IsTestMode))
+-                        {
+-                            FeatureFlags.MessageLogged += LogMessageWrapper;
+-                            //this will block task thread as it waits for data from feature flags process.
+-                            FeatureFlags.CacheAllFlags();
+-                        }
+-                    }
+-                    catch (Exception e) { Logger.LogError($"could not start feature flags manager {e}"); };
+-                });
+ 
+-                //TODO just a test of feature flag event, safe to remove at any time.
+-                DynamoUtilities.DynamoFeatureFlagsManager.FlagsRetrieved += CheckFeatureFlagTest;
+ 
+             }
+ 
+@@ -930,7 +885,6 @@ protected DynamoModel(IStartConfiguration config)
+ 
+             if (!IsServiceMode)
+             {
+-                AuthenticationManager = new AuthenticationManager(config.AuthProvider);
+             }
+ 
+             UpdateManager.Log += UpdateManager_Log;
+@@ -1670,7 +1624,7 @@ private IPreferences CreateOrLoadPreferences(IPreferences preferences)
+ 
+         private static void InitializePreferences(IPreferences preferences)
+         {
+-            ProtoCore.Mirror.MirrorData.PrecisionFormat = DynamoUnits.Display.PrecisionFormat = preferences.NumberFormat;
++            ProtoCore.Mirror.MirrorData.PrecisionFormat = preferences.NumberFormat;
+ 
+             var settings = preferences as PreferenceSettings;
+             if (settings != null)
+@@ -1691,7 +1645,7 @@ private void PreferenceSettings_PropertyChanged(object sender, PropertyChangedEv
+             switch (e.PropertyName)
+             {
+                 case nameof(PreferenceSettings.NumberFormat):
+-                    ProtoCore.Mirror.MirrorData.PrecisionFormat = DynamoUnits.Display.PrecisionFormat = PreferenceSettings.NumberFormat;
++                    ProtoCore.Mirror.MirrorData.PrecisionFormat = PreferenceSettings.NumberFormat;
+                     break;
+             }
+         }
+diff --git a/src/DynamoCore/Scheduler/UpdateRenderPackageAsyncTask.cs b/src/DynamoCore/Scheduler/UpdateRenderPackageAsyncTask.cs
+index da57ec951b..c75a6ac29c 100644
+--- a/src/DynamoCore/Scheduler/UpdateRenderPackageAsyncTask.cs
++++ b/src/DynamoCore/Scheduler/UpdateRenderPackageAsyncTask.cs
+@@ -2,7 +2,6 @@
+ using System.Collections.Generic;
+ using System.Diagnostics;
+ using System.Linq;
+-using Autodesk.DesignScript.Geometry;
+ using Autodesk.DesignScript.Interfaces;
+ using Dynamo.Engine;
+ using Dynamo.Graph.Nodes;
+@@ -231,11 +230,7 @@ private void GetTessellationDataFromGraphicItem(Guid outputPortId, IGraphicItem
+ 
+                 //Todo Plane tessellation needs to be handled here vs in LibG currently
+                 bool instancingEnabled = DynamoModel.FeatureFlags.CheckFeatureFlag<bool>("graphics-primitive-instancing", false);
+-                if (graphicItem is Plane plane)
+-                {
+-                    CreatePlaneTessellation(package, plane);
+-                }
+-                else if (graphicItem is IInstanceableGraphicItem instanceableItem &&
++                if (graphicItem is IInstanceableGraphicItem instanceableItem &&
+                     instanceableItem.InstanceInfoAvailable 
+                     && packageWithInstances != null
+                     && instancingEnabled)
+@@ -251,31 +246,6 @@ private void GetTessellationDataFromGraphicItem(Guid outputPortId, IGraphicItem
+                         {
+                             //TODO if we start to instance more types, expand this edge generation.
+                             //and the swtich case below.
+-                            if (graphicItem is Topology topology)
+-                            {
+-                                Topology topologyInIdentityCS = null;
+-                                switch (topology)
+-                                {
+-                                    case Cuboid _:
+-                                        topologyInIdentityCS = Cuboid.ByLengths();
+-                                        break;
+-                                }
+-                                //if topologyInIdentityCS is still null or Edges is null 
+-                                //don't attempt to add any graphic edges.
+-                                var edges = topologyInIdentityCS?.Edges;
+-                                if (edges != null)
+-                                {
+-                                    foreach (var geom in edges.Select(edge => edge.CurveGeometry))
+-                                    {
+-                                        geom.Tessellate(package, factory.TessellationParameters);
+-                                        geom.Dispose();
+-                                    }
+-
+-                                    edges.ForEach(x => x.Dispose());
+-                                    packageWithInstances.AddInstanceGuidForLineVertexRange(prevLineIndex, package.LineVertexCount - 1, instanceableItem.BaseTessellationGuid);
+-                                }
+-                                topologyInIdentityCS?.Dispose();
+-                            }
+                         }
+                     }
+ 
+@@ -341,28 +311,7 @@ private void GetTessellationDataFromGraphicItem(Guid outputPortId, IGraphicItem
+ 
+                     if (factory.TessellationParameters.ShowEdges)
+                     {
+-                        if (graphicItem is Topology topology)
+-                        {
+-                            if (graphicItem is Surface surf)
+-                            {
+-                                foreach (var curve in surf.PerimeterCurves())
+-                                {
+-                                    curve.Tessellate(package, factory.TessellationParameters);
+-                                    curve.Dispose();
+-                                }
+-                            }
+-                            else
+-                            {
+-                                var edges = topology.Edges;
+-                                foreach (var geom in edges.Select(edge => edge.CurveGeometry))
+-                                {
+-                                    geom.Tessellate(package, factory.TessellationParameters);
+-                                    geom.Dispose();
+-                                }
+-
+-                                edges.ForEach(x => x.Dispose());
+-                            }
+-                        }
++
+                     }
+                 }
+ 
+@@ -399,66 +348,6 @@ private void GetTessellationDataFromGraphicItem(Guid outputPortId, IGraphicItem
+             }
+         }
+ 
+-        private static void CreatePlaneTessellation(IRenderPackage package, Plane plane)
+-        {
+-            package.RequiresPerVertexColoration = true;
+-
+-            var s = 2.5;
+-
+-            var cs = CoordinateSystem.ByPlane(plane);
+-            var a = Point.ByCartesianCoordinates(cs, s, s, 0);
+-            var b = Point.ByCartesianCoordinates(cs, -s, s, 0);
+-            var c = Point.ByCartesianCoordinates(cs, -s, -s, 0);
+-            var d = Point.ByCartesianCoordinates(cs, s, -s, 0);
+-
+-            //Add two triangles to represent the plane
+-            package.AddTriangleVertex(a.X, a.Y, a.Z);
+-            package.AddTriangleVertex(b.X, b.Y, b.Z);
+-            package.AddTriangleVertex(c.X, c.Y, c.Z);
+-
+-            package.AddTriangleVertex(c.X, c.Y, c.Z);
+-            package.AddTriangleVertex(d.X, d.Y, d.Z);
+-            package.AddTriangleVertex(a.X, a.Y, a.Z);
+-
+-            //Add the mesh vertex UV, normal, and color data for the 6 triangle vertices
+-            for (var i = 0; i < 6; i++)
+-            {
+-                package.AddTriangleVertexUV(0, 0);
+-                package.AddTriangleVertexNormal(plane.Normal.X, plane.Normal.Y, plane.Normal.Z);
+-                package.AddTriangleVertexColor(0, 0, 0, 10);
+-            }
+-
+-            // Draw plane edges
+-            package.AddLineStripVertex(a.X, a.Y, a.Z);
+-            package.AddLineStripVertex(b.X, b.Y, b.Z);
+-            package.AddLineStripVertex(b.X, b.Y, b.Z);
+-            package.AddLineStripVertex(c.X, c.Y, c.Z);
+-            package.AddLineStripVertex(c.X, c.Y, c.Z);
+-            package.AddLineStripVertex(d.X, d.Y, d.Z);
+-            package.AddLineStripVertex(d.X, d.Y, d.Z);
+-            package.AddLineStripVertex(a.X, a.Y, a.Z);
+-
+-            // Draw normal
+-            package.AddLineStripVertex(plane.Origin.X, plane.Origin.Y, plane.Origin.Z);
+-            var nEnd = plane.Origin.Add(plane.Normal.Scale(2.5));
+-            package.AddLineStripVertex(nEnd.X, nEnd.Y, nEnd.Z);
+-
+-            //Add the line vertex data for the plane line geometry (4 plane edges and 1 normal).
+-            for (var i = 0; i < 5; i++)
+-            {
+-                package.AddLineStripVertexCount(2);
+-                package.AddLineStripVertexColor(MidTone, MidTone, MidTone, 255);
+-                package.AddLineStripVertexColor(MidTone, MidTone, MidTone, 255);
+-            }
+-
+-            //dispose helper geometry
+-            a.Dispose();
+-            b.Dispose();
+-            c.Dispose();
+-            d.Dispose();
+-            cs.Dispose();
+-        }
+-
+         private static void EnsureColorExistsPerVertex(IRenderPackage package, int previousPointVertexCount, int previousLineVertexCount, int previousMeshVertexCount)
+         {
+             var packageSupplement = package as IRenderPackageSupplement;
+diff --git a/src/DynamoCore/Updates/UpdateManager.cs b/src/DynamoCore/Updates/UpdateManager.cs
+index fe0b93f7e7..ab23dcf31f 100644
+--- a/src/DynamoCore/Updates/UpdateManager.cs
++++ b/src/DynamoCore/Updates/UpdateManager.cs
+@@ -9,7 +9,6 @@
+ using System.Reflection;
+ using System.Xml.Linq;
+ using System.Xml.Serialization;
+-using Autodesk.Analytics.Core;
+ using Dynamo.Core;
+ using Dynamo.Logging;
+ 
+diff --git a/src/Libraries/CoreNodes/Color.cs b/src/Libraries/CoreNodes/Color.cs
+index a42d43d7e9..a204c56dd0 100644
+--- a/src/Libraries/CoreNodes/Color.cs
++++ b/src/Libraries/CoreNodes/Color.cs
+@@ -2,7 +2,6 @@
+ using System.Collections.Generic;
+ using System.IO;
+ using System.Linq;
+-using Autodesk.DesignScript.Geometry;
+ using Autodesk.DesignScript.Runtime;
+ 
+ using Newtonsoft.Json;
+@@ -161,13 +160,6 @@ public static Color BuildColorFrom1DRange(List<Color> colors, List<double> param
+             return ColorRange1D.GetColorAtParameter(colorRange,parameter);
+         }
+ 
+-        [IsVisibleInDynamoLibrary(false)]
+-        public static Color BuildColorFrom2DRange(IList<Color> colors, IList<UV> parameters, UV parameter)
+-        {
+-            var colorRange = ColorRange.ByColorsAndParameters(colors, parameters);
+-            return colorRange.GetColorAtParameter(parameter);
+-        }
+-
+         /// <summary>
+         /// Linearly interpolate between two colors.
+         /// </summary>
+@@ -199,51 +191,6 @@ public static Color Lerp(Color start, Color end, double t)
+             return ByARGB(num[0], num[1], num[2], num[3]);
+         }
+ 
+-        /// <summary>
+-        /// Bilinearly interpolate between a set of colors.
+-        /// </summary>
+-        /// <param name="colors"></param>
+-        /// <param name="parameter"></param>
+-        /// <returns>The interpolated color or white.</returns>
+-        /// This algorithm is not the same as the solution found from wikipedia 
+-        /// (reference: https://en.wikipedia.org/wiki/Bilinear_interpolation)
+-        [IsVisibleInDynamoLibrary(false)]
+-        public static Color Blerp(IList<IndexedColor2D> colors, UV parameter)
+-        {
+-            var num = new double[4];
+-            var totalArea = 0.0;
+-            foreach (var ci in colors)
+-            {
+-                var t = ci.Parameter;
+-                var d = Math.Sqrt(Math.Pow(t.U - parameter.U, 2) + Math.Pow(t.V - parameter.V, 2));
+-                if (d == 0.0)
+-                {
+-                    return ci.Color;
+-                }
+-                var w = 1 / d;
+-
+-                num[0] += ci.Color.Alpha * w;
+-                num[1] += ci.Color.Red * w;
+-                num[2] += ci.Color.Green * w;
+-                num[3] += ci.Color.Blue * w;
+-                totalArea += w;
+-            }
+-
+-            return ByARGB((int)(num[0] / totalArea),
+-                (int)(num[1] / totalArea),
+-                (int)(num[2] / totalArea),
+-                (int)(num[3] / totalArea));
+-        }
+-
+-
+-
+-        private static double Area(UV min, UV max)
+-        {
+-            var u = System.Math.Sqrt(System.Math.Pow(max.U - min.U, 2));
+-            var v = System.Math.Sqrt(System.Math.Pow(max.V - min.V, 2));
+-            return u * v;
+-        }
+-
+         public override string ToString()
+         {
+             return string.Format("Color(Red = {0}, Green = {1}, Blue = {2}, Alpha = {3})", Red, Green, Blue, Alpha);
+@@ -349,19 +296,6 @@ public int CompareTo(object obj)
+                 return -1;
+             }
+         }
+-
+-        [IsVisibleInDynamoLibrary(false)]
+-        public class IndexedColor2D
+-        {
+-            public Color Color { get; set; }
+-            public UV Parameter { get; set; }
+-
+-            public IndexedColor2D(Color color, UV parameter)
+-            {
+-                Color = color;
+-                Parameter = parameter;
+-            }
+-        }
+     }
+ 
+     [IsVisibleInDynamoLibrary(false)]
+@@ -540,48 +474,4 @@ public static class DefaultColorRanges
+             Color.ByARGB(255,0,255,255) // cyan
+         };
+     }
+-
+-    [IsVisibleInDynamoLibrary(true)]
+-    public class ColorRange
+-    {
+-        private Quadtree quadtree;
+-        
+-        private IList<Color.IndexedColor2D> indexedColors;
+-
+-        private ColorRange(IEnumerable<Color> colors, IEnumerable<UV> parameters)
+-        {
+-            var parameterList = parameters as UV[] ?? parameters.ToArray();
+-            var colorList = colors as Color[] ?? colors.ToArray();
+-            indexedColors = colorList.Zip(parameterList, (c, t) => new Color.IndexedColor2D(c, t)).ToList();
+-        }
+-
+-        /// <summary>
+-        /// Create a ColorRange by supplying lists of colors and UVs.
+-        /// </summary>
+-        /// <param name="colors">A list of colors.</param>
+-        /// <param name="parameters">A list of parameters between (0.0,0.0) and (1.0,1.0).</param>
+-        /// <returns>A ColorRange object.</returns>
+-        public static ColorRange ByColorsAndParameters(
+-            IList<Color> colors, IList<UV> parameters)
+-        {
+-            return new ColorRange(colors, parameters);
+-        }
+-
+-        /// <summary>
+-        /// Returns the color in this color range at the specified parameter.
+-        /// </summary>
+-        /// <param name="parameter">A UV between (0.0,0.0) and (1.0,1.0).</param>
+-        /// <returns>A Color.</returns>
+-        public Color GetColorAtParameter(UV parameter)
+-        {
+-            var color = Color.ByARGB(255, 255, 255, 255);
+-
+-            var weightedColors = indexedColors.ToList()
+-                .OrderBy(ic => ic.Parameter.Area(parameter)).Take(4).ToList();
+-
+-            color = Color.Blerp(weightedColors, parameter);
+-
+-            return color;
+-        }
+-    }
+ }
+\ No newline at end of file
+diff --git a/src/Libraries/CoreNodes/CoreNodes.csproj b/src/Libraries/CoreNodes/CoreNodes.csproj
+index 2825f28f85..dbf374b05e 100644
+--- a/src/Libraries/CoreNodes/CoreNodes.csproj
++++ b/src/Libraries/CoreNodes/CoreNodes.csproj
+@@ -26,9 +26,6 @@
+   <ItemGroup Condition=" '$(TargetFramework)' == 'net6.0' ">
+     <PackageReference Include="CoreCLR-NCalc" Version="2.2.92" />
+   </ItemGroup>
+-  <ItemGroup Label="Common dependencies">
+-    <PackageReference Include="DynamoVisualProgramming.LibG_229_0_0" Version="2.18.0.665"/>
+-  </ItemGroup>
+   <ItemGroup>
+     <ProjectReference Include="..\..\DynamoCore\DynamoCore.csproj">
+       <Project>{7858fa8c-475f-4b8e-b468-1f8200778cf8}</Project>
+@@ -48,11 +45,6 @@
+       <Project>{c0d6dee5-5532-4345-9c66-4c00d7fdb8be}</Project>
+       <Name>DesignScriptBuiltin</Name>
+     </ProjectReference>
+-    <ProjectReference Include="..\DynamoUnits\Units.csproj">
+-      <Project>{6e0a079e-85f1-45a1-ad5b-9855e4344809}</Project>
+-      <Name>Units</Name>
+-      <Private>False</Private>
+-    </ProjectReference>
+   </ItemGroup>
+   <ItemGroup>
+     <Content Include="DSCoreNodes.Migrations.xml">
+diff --git a/src/Libraries/CoreNodes/Python.cs b/src/Libraries/CoreNodes/Python.cs
+deleted file mode 100644
+index 5e027cf71f..0000000000
+--- a/src/Libraries/CoreNodes/Python.cs
++++ /dev/null
+@@ -1,45 +0,0 @@
+-using System;
+-using System.Collections;
+-using System.Linq;
+-using Autodesk.DesignScript.Runtime;
+-using Dynamo.PythonServices;
+-
+-namespace DSCore
+-{
+-    /// <summary>
+-    /// Python evaluator that will only throw an error on evaluation.
+-    /// Used primarily to indicate that a real Python evaluator could not be found.
+-    /// </summary>
+-    [IsVisibleInDynamoLibrary(false)]
+-    [Obsolete("This class will be removed in Dynamo 3.0")]
+-    public static class DummyPythonEvaluator
+-    {
+-        /// <summary>
+-        /// Throws an exception with the assigned message
+-        /// </summary>
+-        public static object Evaluate(string code, IList bindingNames, [ArbitraryDimensionArrayImport] IList bindingValues)
+-        {
+-            throw new InvalidOperationException(Properties.Resources.MissingPythonEngine);
+-        }
+-    }
+-
+-    /// <summary>
+-    /// Evaluate python code on any Python engine. Should only be used in VM
+-    /// </summary>
+-    [IsVisibleInDynamoLibrary(false)]
+-    public class PythonEvaluator
+-    {
+-        public static object Evaluate(string engineName,
+-                                      string code,
+-                                      IList bindingNames,
+-                                      [ArbitraryDimensionArrayImport] IList bindingValues)
+-        {
+-            var engine = PythonEngineManager.Instance.AvailableEngines.FirstOrDefault(x => x.Name == engineName);
+-            if (engine == null)
+-            {
+-                throw new InvalidOperationException(Properties.Resources.MissingPythonEngine);
+-            }
+-            return engine?.Evaluate(code, bindingNames, bindingValues) ?? null;
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/src/Libraries/CoreNodes/Quadtree.cs b/src/Libraries/CoreNodes/Quadtree.cs
+deleted file mode 100644
+index 54809da16b..0000000000
+--- a/src/Libraries/CoreNodes/Quadtree.cs
++++ /dev/null
+@@ -1,452 +0,0 @@
+-using System;
+-using System.Collections.Generic;
+-using System.Linq;
+-
+-using Autodesk.DesignScript.Geometry;
+-using Autodesk.DesignScript.Runtime;
+-
+-using DSCore.Properties;
+-
+-namespace DSCore
+-{
+-    [IsVisibleInDynamoLibrary(false)]
+-    public class Quadtree
+-    {
+-        public Node Root { get; set; }
+-
+-        private Quadtree(IEnumerable<UV> uvs)
+-        {
+-            Root = new Node(UV.ByCoordinates(), UV.ByCoordinates(1, 1));
+-            uvs.ToList().ForEach(uv => Root.Insert(uv));
+-        }
+-
+-        /// <summary>
+-        /// Construct a Quadtree encompassing the (0,0)->(1,1) domain.
+-        /// </summary>
+-        /// <param name="uvs">A set of UVs in the (0,0)->(1,1) domain.</param>
+-        /// <returns>A Quadtree object.</returns>
+-        public static Quadtree ByUVs(IEnumerable<UV> uvs)
+-        {
+-            if (uvs == null)
+-            {
+-                throw new ArgumentNullException(
+-                    "uvs",
+-                    Resources.QuadtreeConstructionNullUVSetMessage);
+-            }
+-
+-            if (!uvs.Any())
+-            {
+-                throw new ArgumentException(
+-                    Resources.QuadtreeConstructionEmptyUVSetMessage);
+-            }
+-
+-            return new Quadtree(uvs);
+-        }
+-
+-        /// <summary>
+-        /// Find all quadtree points (UVs) in the quadtree within a radius of the given UV location.
+-        /// </summary>
+-        /// <param name="center">The UV at the center of the search area.</param>
+-        /// <param name="radius">The radius of the search area.</param>
+-        /// <returns>A list of UVs.</returns>
+-        public List<UV> FindPointsWithinRadius(UV center, double radius)
+-        {
+-            if (center == null)
+-            {
+-                throw new ArgumentNullException(
+-                    "center",
+-                    Resources.FindPointsWithinRadiusNullPointMessage);
+-            }
+-
+-            if (radius <= 0.0)
+-            {
+-                throw new ArgumentException(
+-                    "radius",
+-                    Resources.FindPointsWithinRadiusSearchRadiusMessage);
+-            }
+-
+-            return Root.FindNodesWithinRadius(center, radius)
+-                .Where(n => n.Point != null)
+-                .Select(n => n.Point)
+-                .ToList();
+-        }
+-
+-        public List<UV> FindPointsInRectangle(UVRect rectangle)
+-        {
+-            return
+-                Root.FindNodesIntersectingRectangle(rectangle)
+-                    .Where(n => n.Point != null)
+-                    .Select(n => n.Point)
+-                    .ToList();
+-        }
+-
+-    }
+-
+-    [IsVisibleInDynamoLibrary(false)]
+-    public class Node
+-    {
+-        public Node Parent { get; internal set; }
+-        public Node NW { get; internal set; }
+-        public Node NE { get; internal set; }
+-        public Node SW { get; internal set; }
+-        public Node SE { get; internal set; }
+-        public UV Point { get; set; }
+-        public UVRect Bounds { get; set; }
+-        public object Item { get; set; }
+-
+-        public bool IsLeafNode
+-        {
+-            get { return NW == null && NE == null && SW == null && SE == null; }
+-        }
+-
+-        public Node(UV min, UV max)
+-        {
+-            Bounds = new UVRect(min, max);
+-        }
+-
+-        public bool Contains(UV uv)
+-        {
+-            return Bounds.Contains(uv);
+-        }
+-
+-        public void Insert(UV uv)
+-        {
+-            if (!Contains(uv))
+-            {
+-                return;
+-            }
+-
+-            if (IsLeafNode)
+-            {
+-                // If the node that is being inserted is 
+-                // the same as one that exists, then return
+-                // true;
+-
+-                if (Point == null)
+-                {
+-                    Point = uv;
+-                    return;
+-                }
+-
+-                if (uv.IsAlmostEqualTo(Point))
+-                {
+-                    return;
+-                }
+-
+-                Split();
+-
+-                // Move the existing point into a new cell
+-                NW.Insert(UV.ByCoordinates(Point.U, Point.V));
+-                NE.Insert(UV.ByCoordinates(Point.U, Point.V));
+-                SE.Insert(UV.ByCoordinates(Point.U, Point.V));
+-                SW.Insert(UV.ByCoordinates(Point.U, Point.V));
+-
+-                Point = null;
+-
+-                // Insert the new UV into the correct cell
+-                NW.Insert(uv);
+-                NE.Insert(uv);
+-                SW.Insert(uv);
+-                SE.Insert(uv);
+-            }
+-            else
+-            {
+-                NW.Insert(uv);
+-                NE.Insert(uv);
+-                SW.Insert(uv);
+-                SE.Insert(uv);
+-            }
+-        }
+-
+-        /// <summary>
+-        /// Splite a node into four quadrants.
+-        /// </summary>
+-        /// <returns></returns>
+-        private void Split()
+-        {
+-            var l0 = UV.ByCoordinates(Bounds.Min.U, Bounds.Min.V);
+-            var l1 = UV.ByCoordinates(Bounds.Min.U, Bounds.Min.V + Bounds.Height / 2);
+-            var l2 = UV.ByCoordinates(Bounds.Min.U, Bounds.Max.V);
+-
+-            var c0 = UV.ByCoordinates(Bounds.Min.U + Bounds.Width / 2, Bounds.Min.V);
+-            var c1 = UV.ByCoordinates(Bounds.Min.U + Bounds.Width / 2, Bounds.Min.V + Bounds.Height / 2);
+-            var c2 = UV.ByCoordinates(Bounds.Min.U + Bounds.Width / 2, Bounds.Max.V);
+-
+-            var r0 = UV.ByCoordinates(Bounds.Max.U, Bounds.Min.V);
+-            var r1 = UV.ByCoordinates(Bounds.Max.U, Bounds.Min.V + Bounds.Height / 2);
+-            var r2 = UV.ByCoordinates(Bounds.Max.U, Bounds.Max.V);
+-
+-            NW = new Node(l1, c2);
+-            NE = new Node(c1, r2);
+-            SW = new Node(l0, c1);
+-            SE = new Node(c0, r1);
+-
+-            NW.Parent = this;
+-            NE.Parent = this;
+-            SW.Parent = this;
+-            SE.Parent = this;
+-        }
+-
+-        public bool TryFind(UV uv, out Node node)
+-        {
+-            if (!Contains(uv))
+-            {
+-                node = null;
+-                return false;
+-            }
+-
+-            if (IsLeafNode)
+-            {
+-                if (Point.IsAlmostEqualTo(uv))
+-                {
+-                    node = this;
+-                    return true;
+-                }
+-                else
+-                {
+-                    node = null;
+-                    return false;
+-                }
+-            }
+-
+-            if (NW.Contains(uv))
+-            {
+-                if (NW.TryFind(uv, out node))
+-                {
+-                    return true;
+-                }
+-            }
+-
+-            else if (NE.Contains(uv))
+-            {
+-                if (NE.TryFind(uv, out node))
+-                {
+-                    return true;
+-                }
+-            }
+-
+-
+-            else if (SW.Contains(uv))
+-            {
+-                if (SW.TryFind(uv, out node))
+-                {
+-                    return true;
+-                }
+-            }
+-
+-            else if (SE.Contains(uv))
+-            {
+-                if (SE.TryFind(uv, out node))
+-                {
+-                    return true;
+-                } 
+-            }
+-
+-            node = null;
+-            return false;
+-        }
+-
+-        public List<Node> GetAllNodes()
+-        {
+-            var nodes = new List<Node>();
+-
+-            if (IsLeafNode)
+-            {
+-                nodes.Add(this);
+-                return nodes;
+-            }
+-
+-            nodes.AddRange(NW.GetAllNodes());
+-            nodes.AddRange(NE.GetAllNodes());
+-            nodes.AddRange(SW.GetAllNodes());
+-            nodes.AddRange(SE.GetAllNodes());
+-
+-            return nodes;
+-        }
+-
+-        public List<Node> FindAllNodesUpLevel(int count)
+-        {
+-            var i = 0;
+-            Node level = this;
+-
+-            while (i < count)
+-            {
+-                if (level.Parent != null)
+-                {
+-                    level = level.Parent;
+-                }
+-                else
+-                {
+-                    break;
+-                }
+-                i++;
+-            }
+-
+-            return level.GetAllNodes();
+-        }
+-
+-        public Node FindNodeWhichContains(UV point)
+-        {
+-            Node n = null;
+-
+-            if (IsLeafNode)
+-            {
+-                if (Contains(point))
+-                {
+-                    return this;
+-                }
+-            }
+-            else
+-            {
+-                if (NW.Contains(point))
+-                {
+-                    n = NW.FindNodeWhichContains(point);
+-                }
+-                else if (NE.Contains(point))
+-                {
+-                    n = NE.FindNodeWhichContains(point);
+-                }
+-                else if (SW.Contains(point))
+-                {
+-                    n = SW.FindNodeWhichContains(point);
+-                }
+-                else if (SE.Contains(point))
+-                {
+-                    n = SE.FindNodeWhichContains(point);
+-                }
+-                
+-            }
+-
+-            return n;
+-        }
+-
+-        public List<Node> FindNodesWithinRadius(UV location, double radius)
+-        {
+-            var nodes = new List<Node>();
+-            var circle = Circle.ByCenterPointRadius(
+-                Autodesk.DesignScript.Geometry.Point.ByCoordinates(location.U, location.V),
+-                radius);
+-
+-            if (!Intersects(circle)) return nodes;
+-
+-            if (IsLeafNode)
+-            {
+-                nodes.Add(this);
+-                return nodes;
+-            }
+-
+-            nodes.AddRange(NW.FindNodesWithinRadius(location, radius));
+-            nodes.AddRange(NE.FindNodesWithinRadius(location, radius));
+-            nodes.AddRange(SW.FindNodesWithinRadius(location, radius));
+-            nodes.AddRange(SE.FindNodesWithinRadius(location, radius));
+-
+-            return nodes;
+-        }
+-
+-        public List<Node> FindNodesIntersectingRectangle(UVRect rectangle)
+-        {
+-            var nodes = new List<Node>();
+-            if (!Intersects(rectangle)) return nodes;
+-
+-            if (IsLeafNode)
+-            {
+-                nodes.Add(this);
+-                return nodes;
+-            }
+-
+-            nodes.AddRange(NW.FindNodesIntersectingRectangle(rectangle));
+-            nodes.AddRange(NE.FindNodesIntersectingRectangle(rectangle));
+-            nodes.AddRange(SW.FindNodesIntersectingRectangle(rectangle));
+-            nodes.AddRange(SE.FindNodesIntersectingRectangle(rectangle));
+-
+-            return nodes;
+-        }
+-
+-        private bool Intersects(Circle circle)
+-        {
+-            //http://stackoverflow.com/questions/401847/circle-rectangle-collision-detection-intersection
+-
+-            var circleDistX = System.Math.Abs(circle.CenterPoint.X - Bounds.CenterPoint.U);
+-            var circleDistY = System.Math.Abs(circle.CenterPoint.Y - Bounds.CenterPoint.V);
+-
+-            if (circleDistX > (Bounds.Width / 2 + circle.Radius)) { return false; }
+-            if (circleDistY > (Bounds.Height / 2 + circle.Radius)) { return false; }
+-
+-            if (circleDistX <= (Bounds.Width / 2)) { return true; }
+-            if (circleDistY <= (Bounds.Height / 2)) { return true; }
+-
+-            var cornerDistance_sq = System.Math.Pow(circleDistX - Bounds.Width / 2, 2) +
+-                                 System.Math.Pow(circleDistY - Bounds.Height / 2, 2);
+-
+-            return (cornerDistance_sq <= System.Math.Pow(circle.Radius, 2));
+-        }
+-
+-        private bool Intersects(UVRect rect)
+-        {
+-            return Bounds.Intersects(rect);
+-        }
+-    }
+-
+-    /// <summary>
+-    /// Helper class used to define a Rectangle described
+-    /// by a minimum and a maximum UV.
+-    /// </summary>
+-    [IsVisibleInDynamoLibrary(false)]
+-    public class UVRect
+-    {
+-        public UV Min { get; set; }
+-        public UV Max { get; set; }
+-        
+-        public double Width
+-        {
+-            get { return Max.U - Min.U; }
+-        }
+-
+-        public double Height
+-        {
+-            get { return Max.V - Min.V; }
+-        }
+-
+-        public UV CenterPoint
+-        {
+-            get { return UV.ByCoordinates(Min.U + Width/2, Min.V + Height/2); }
+-        }
+-
+-        public UVRect(UV min, UV max)
+-        {
+-            Min = min;
+-            Max = max;
+-        }
+-
+-        public bool Contains(UV uv)
+-        {
+-            return uv.U <= Max.U && uv.U >= Min.U && 
+-                uv.V <= Max.V && uv.V >= Min.V;
+-        }
+-
+-        public bool Intersects(UVRect rect)
+-        {
+-            return this.Min.U < rect.Max.U && this.Max.U > rect.Min.U && this.Min.V < rect.Max.V
+-                && this.Max.V > rect.Min.V;
+-        }
+-    }
+-
+-    /// <summary>
+-    /// Extensions methods for UVs.
+-    /// </summary>
+-    internal static class UVExtensions
+-    {
+-        public static bool IsAlmostEqualTo(this UV a, UV b)
+-        {
+-            const double tolerance = 0.00001;
+-            return System.Math.Abs(a.U - b.U) < tolerance && System.Math.Abs(a.V - b.V) < tolerance;
+-        }
+-
+-        public static double Area(this UV min, UV max)
+-        {
+-            var u = System.Math.Sqrt(System.Math.Pow(max.U - min.U, 2));
+-            var v = System.Math.Sqrt(System.Math.Pow(max.V - min.V, 2));
+-            return u * v;
+-        }
+-    }
+-}
+diff --git a/src/NodeServices/DynamoServices.csproj b/src/NodeServices/DynamoServices.csproj
+index 058dd1d9d9..28489d9bf0 100644
+--- a/src/NodeServices/DynamoServices.csproj
++++ b/src/NodeServices/DynamoServices.csproj
+@@ -11,6 +11,5 @@
+     <RootNamespace>DynamoServices</RootNamespace>
+     <AssemblyName>DynamoServices</AssemblyName>
+     <DocumentationFile>$(OutputPath)\DynamoServices.XML</DocumentationFile>
+-    <TargetFramework>netstandard2.0</TargetFramework>
+   </PropertyGroup>
+ </Project>
+\ No newline at end of file

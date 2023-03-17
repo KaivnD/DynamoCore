@@ -1,0 +1,22 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
+
+// General Information about an assembly is controlled through the following 
+// set of attributes. Change these attribute values to modify the information
+// associated with an assembly.
+[assembly: AssemblyTitle("DesignScript Core Library")]
+[assembly: AssemblyCulture("")]
+
+// The following GUID is for the ID of the typelib if this project is exposed to COM
+// [assembly: AssemblyKeyFile("ProtoCore.snk")]
+[assembly: InternalsVisibleTo("ProtoTest")]
+[assembly: InternalsVisibleTo("ProtoTestFx")]
+[assembly:InternalsVisibleTo("DynamoCore")]
+[assembly: InternalsVisibleTo("DynamoCoreWpf")]
+[assembly: InternalsVisibleTo("DynamoCoreTests")]
+[assembly: InternalsVisibleTo("DynamoCoreWpfTests")]
+[assembly: InternalsVisibleTo("ProtoImperative")]
+[assembly: InternalsVisibleTo("ProtoScript")]
+[assembly: InternalsVisibleTo("NodeDocumentationMarkdownGenerator")]
+[assembly: InternalsVisibleTo("ProtoAssociative")]
+

@@ -1,0 +1,121 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(SolutionDir)Config\CS_SDK.props" />
+  </ImportGroup>
+  <PropertyGroup>
+    <ProjectGuid>{7858FA8C-475F-4B8E-B468-1F8200778CF8}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Dynamo</RootNamespace>
+    <AssemblyName>DynamoCore</AssemblyName>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <DocumentationFile>$(OutputPath)\DynamoCore.XML</DocumentationFile>
+    <LibGOsToken>windows</LibGOsToken>
+    <LibGOsToken Condition="$(Platform.Contains('Linux'))">linux</LibGOsToken>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(ExecutionEngine)' != 'FScheme' ">
+    <DefineConstants>$(DefineConstants);USE_DSENGINE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="Graph\ConnectorPinModel.cs" />
+  </ItemGroup>
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net6.0' ">
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Win32.Registry" Version="4.7.0" />
+    <PackageReference Include="System.Drawing.Common" Version="6.0.0" GeneratePathProperty="true" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net48' ">         
+    <Reference Include="System.Configuration" />
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+  <ItemGroup Label="Common dependencies">
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Engine\GraphLayout\GraphLayout.csproj">
+      <Project>{c2595b04-856d-40ae-8b99-4804c7a70708}</Project>
+      <Name>GraphLayout</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Engine\ProtoAssociative\ProtoAssociative.csproj">
+      <Project>{7318d5e5-9d15-4abe-8a51-92f58d4f0b85}</Project>
+      <Name>ProtoAssociative</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Engine\ProtoCore\ProtoCore.csproj">
+      <Project>{7a9e0314-966f-4584-baa3-7339cbb849d1}</Project>
+      <Name>ProtoCore</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Engine\ProtoImperative\ProtoImperative.csproj">
+      <Project>{0d3d43dc-bd7e-46f0-93f7-1c6a6cc79948}</Project>
+      <Name>ProtoImperative</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Engine\ProtoScript\ProtoScript.csproj">
+      <Project>{a4794476-7d0e-41c0-ad83-4ab929c0a46c}</Project>
+      <Name>ProtoScript</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\DynamoUtilities\DynamoUtilities.csproj">
+      <Project>{B5F435CB-0D8A-40B1-A4F7-5ECB3CE792A9}</Project>
+      <Name>DynamoUtilities</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Libraries\DesignScriptBuiltin\DesignScriptBuiltin.csproj">
+      <Project>{c0d6dee5-5532-4345-9c66-4c00d7fdb8be}</Project>
+      <Name>DesignScriptBuiltin</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Libraries\VMDataBridge\VMDataBridge.csproj">
+      <Project>{ccb6e56b-2da1-4eba-a1f9-e8510e129d12}</Project>
+      <Name>VMDataBridge</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\NodeServices\DynamoServices.csproj">
+      <Project>{ef879a10-041d-4c68-83e7-3192685f1bae}</Project>
+      <Name>DynamoServices</Name>
+      <Private>False</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="BuiltInAndOperators\Operators.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="BuiltInAndOperators\BuiltIn.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="BuiltInAndOperators\BuiltIn.Migrations.xml" />
+  </ItemGroup>
+    <ItemGroup>
+    <Compile Update="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+    <ItemGroup>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Properties\Resources.en-US.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.en-US.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <Target Name="AfterBuildOps" AfterTargets="ResolveSateliteResDeps">
+    <!-- Get DynamoCore -->
+        <GetAssemblyIdentity AssemblyFiles="$(OutDir)$(TargetName).dll">
+            <Output TaskParameter="Assemblies" ItemName="DynamoCoreInfo" />
+        </GetAssemblyIdentity>
+    <ItemGroup Condition=" '$(TargetFramework)' == 'net48' ">
+        <!-- Generate customization dll for DynamoCore -->
+        <GenerateResource SdkToolsPath="$(TargetFrameworkSDKToolsDirectory)" UseSourcePath="true" Sources="$(ProjectDir)DynamoCoreImages.resx" OutputResources="$(ProjectDir)DynamoCoreImages.resources" References="$(SystemDrawingDllPath)" />
+        <AL SdkToolsPath="$(TargetFrameworkSDKToolsDirectory)" TargetType="library" EmbedResources="$(ProjectDir)DynamoCoreImages.resources" OutputAssembly="$(OutDir)DynamoCore.customization.dll" Version="%(DynamoCoreInfo.Version)" />
+        <!-- Generate customization dll for Operators -->
+        <GenerateResource SdkToolsPath="$(TargetFrameworkSDKToolsDirectory)" UseSourcePath="true" Sources="$(ProjectDir)/BuiltInAndOperators/OperatorsImages.resx" OutputResources="$(ProjectDir)/BuiltInAndOperators/OperatorsImages.resources" References="$(SystemDrawingDllPath)" />
+        <AL SdkToolsPath="$(TargetFrameworkSDKToolsDirectory)" TargetType="library" EmbedResources="$(ProjectDir)/BuiltInAndOperators/OperatorsImages.resources" OutputAssembly="$(OutDir)Operators.customization.dll" Version="%(DynamoCoreInfo.Version)" />
+        <!-- Generate customization dll for BuiltIn -->
+        <GenerateResource SdkToolsPath="$(TargetFrameworkSDKToolsDirectory)" UseSourcePath="true" Sources="$(ProjectDir)/BuiltInAndOperators/BuiltInImages.resx" OutputResources="$(ProjectDir)/BuiltInAndOperators/BuiltInImages.resources" References="$(SystemDrawingDllPath)" />
+        <AL SdkToolsPath="$(TargetFrameworkSDKToolsDirectory)" TargetType="library" EmbedResources="$(ProjectDir)/BuiltInAndOperators/BuiltInImages.resources" OutputAssembly="$(OutDir)BuiltIn.customization.dll" Version="%(DynamoCoreInfo.Version)" />
+    </ItemGroup>
+  </Target>
+</Project>

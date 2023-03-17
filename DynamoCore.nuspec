@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package>
+  <metadata>
+    <id>DynamoCore</id>
+    <title>Dynamo forked, contains `DynamoCore` and it's dependencies package</title>
+    <summary>Dynamo forked, contains `DynamoCore` and it's dependencies package</summary>
+    <description>Dynamo forked, contains `DynamoCore` and it's dependencies package</description>
+    <version>2.18.0</version>
+    <authors>KaivnD</authors>
+    <owners>KaivnD</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <releaseNotes>Dynamo forked, contains `DynamoCore` and it's dependencies package</releaseNotes>
+    <tags>DesignScript Engine ProtoScript DynamoCore</tags>
+    <repository type="git" url="https://github.com/KaivnD/DynamoCore.git" branch="master" />
+    <dependencies>
+        <group targetFramework=".NETFramework4.8">
+            <dependency id="System.Collections.Immutable" version="5.0.0"/>
+            <dependency id="Newtonsoft.Json" version="13.0.1"/>
+        </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <file src=".\bin\AnyCPU\Release\en-US\**" target="lib\net48\en-US" />
+    <file src=".\bin\AnyCPU\Release\BuiltIn.ds" target="content" />
+    <file src=".\bin\AnyCPU\Release\DesignScriptBuiltin.customization.dll" target="lib\net48" />
+    <file src=".\bin\AnyCPU\Release\DesignScriptBuiltin.dll" target="lib\net48" />
+    <file src=".\bin\AnyCPU\Release\DesignScriptBuiltin.xml" target="content" />
+    <file src=".\bin\AnyCPU\Release\DSCoreNodes.customization.dll" target="lib\net48" />
+    <file src=".\bin\AnyCPU\Release\DSCoreNodes.dll" target="lib\net48" />
+    <file src=".\bin\AnyCPU\Release\DSCoreNodes.Migrations.xml" target="content" />
+    <file src=".\bin\AnyCPU\Release\DSCoreNodes.xml" target="content" />
+    <file src=".\bin\AnyCPU\Release\DSCoreNodes_DynamoCustomization.xml" target="content" />
+    <file src=".\bin\AnyCPU\Release\DynamoCore.dll" target="lib\net48" />
+    <file src=".\bin\AnyCPU\Release\DynamoCore.XML" target="content" />
+    <file src=".\bin\AnyCPU\Release\DynamoServices.dll" target="lib\net48" />
+    <file src=".\bin\AnyCPU\Release\DynamoServices.XML" target="content" />
+    <file src=".\bin\AnyCPU\Release\DynamoUtilities.dll" target="lib\net48" />
+    <file src=".\bin\AnyCPU\Release\FunctionObject.ds" target="content" />
+    <file src=".\bin\AnyCPU\Release\GraphLayout.dll" target="lib\net48" />
+    <file src=".\bin\AnyCPU\Release\ProtoAssociative.dll" target="lib\net48" />
+    <file src=".\bin\AnyCPU\Release\ProtoCore.dll" target="lib\net48" />
+    <file src=".\bin\AnyCPU\Release\ProtoImperative.dll" target="lib\net48" />
+    <file src=".\bin\AnyCPU\Release\ProtoScript.dll" target="lib\net48" />
+    <file src=".\bin\AnyCPU\Release\VMDataBridge.dll" target="lib\net48" />
+  </files>
+</package>

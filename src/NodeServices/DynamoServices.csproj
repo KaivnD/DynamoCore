@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(SolutionDir)Config\CS_SDK.props" />
+  </ImportGroup>
+  <PropertyGroup>
+    <ProductVersion>8.0.30703</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{EF879A10-041D-4C68-83E7-3192685F1BAE}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>DynamoServices</RootNamespace>
+    <AssemblyName>DynamoServices</AssemblyName>
+    <DocumentationFile>$(OutputPath)\DynamoServices.XML</DocumentationFile>
+  </PropertyGroup>
+</Project>
