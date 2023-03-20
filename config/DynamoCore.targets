@@ -1,0 +1,18 @@
+<Project>
+	<ItemGroup>
+		<_DSSources Include="$(MSBuildThisFileDirectory)../content/*.ds" />
+		<_XMLSources Include="$(MSBuildThisFileDirectory)../content/*.xml" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="@(_DSSources)" Condition="'$(CopyDynamoCoreContent)' == 'true'">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<PublishState>Included</PublishState>
+            <Visible>false</Visible>
+		</None>
+		<None Include="@(_XMLSources)" Condition="'$(CopyDynamoCoreContent)' == 'true'">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<PublishState>Included</PublishState>
+            <Visible>false</Visible>
+		</None>
+	</ItemGroup>
+</Project>

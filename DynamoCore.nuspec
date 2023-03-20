@@ -20,16 +20,12 @@
     </dependencies>
   </metadata>
   <files>
+    <file src=".\config\DynamoCore.targets" target="build\DynamoCore.targets"></file>
+
     <file src=".\bin\AnyCPU\Release\en-US\**" target="lib\net48\en-US" />
-    <file src=".\bin\AnyCPU\Release\BuiltIn.ds" target="content" />
     <file src=".\bin\AnyCPU\Release\DesignScriptBuiltin.customization.dll" target="lib\net48" />
     <file src=".\bin\AnyCPU\Release\DesignScriptBuiltin.dll" target="lib\net48" />
     <file src=".\bin\AnyCPU\Release\DesignScriptBuiltin.xml" target="content" />
-    <file src=".\bin\AnyCPU\Release\DSCoreNodes.customization.dll" target="lib\net48" />
-    <file src=".\bin\AnyCPU\Release\DSCoreNodes.dll" target="lib\net48" />
-    <file src=".\bin\AnyCPU\Release\DSCoreNodes.Migrations.xml" target="content" />
-    <file src=".\bin\AnyCPU\Release\DSCoreNodes.xml" target="content" />
-    <file src=".\bin\AnyCPU\Release\DSCoreNodes_DynamoCustomization.xml" target="content" />
     <file src=".\bin\AnyCPU\Release\DynamoCore.dll" target="lib\net48" />
     <file src=".\bin\AnyCPU\Release\DynamoCore.XML" target="content" />
     <file src=".\bin\AnyCPU\Release\DynamoServices.dll" target="lib\net48" />
