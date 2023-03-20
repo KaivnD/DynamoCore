@@ -459,7 +459,6 @@ namespace Dynamo.Graph.Nodes
         /// <summary>
         ///  The name that is displayed in the UI for this NodeModel.
         /// </summary>
-        [JsonIgnore()]
         public string Name
         {
             get { return name; }
@@ -1501,7 +1500,7 @@ namespace Dynamo.Graph.Nodes
         /// </summary>
         /// <param name="inputAstNodes"></param>
         /// <param name="context">Compilation context</param>
-        internal virtual IEnumerable<AssociativeNode> BuildAst(List<AssociativeNode> inputAstNodes, CompilationContext context)
+        public virtual IEnumerable<AssociativeNode> BuildAst(List<AssociativeNode> inputAstNodes, CompilationContext context)
         {
             OnBuilt();
 

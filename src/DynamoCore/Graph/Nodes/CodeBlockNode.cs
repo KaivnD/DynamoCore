@@ -421,7 +421,7 @@ namespace Dynamo.Graph.Nodes
             LoadAndCreateConnectors(inportConnections, outportConnections, inportPins, outportPins, SaveContext.Undo);
         }
 
-        internal override IEnumerable<AssociativeNode> BuildAst(List<AssociativeNode> inputAstNodes, CompilationContext context)
+        public override IEnumerable<AssociativeNode> BuildAst(List<AssociativeNode> inputAstNodes, CompilationContext context)
         {
             //Do not build if the node is in error.
             if (State == ElementState.Error)

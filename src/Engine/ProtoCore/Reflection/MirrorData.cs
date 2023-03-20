@@ -208,7 +208,7 @@ namespace ProtoCore
                 return null;
             }
 
-            internal static string PrecisionFormat { get; set; } = "f3";
+            public static string PrecisionFormat { get; set; } = "f3";
 
             /// <summary>
             /// Returns string representation of data

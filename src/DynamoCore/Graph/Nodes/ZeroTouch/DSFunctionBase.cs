@@ -92,7 +92,7 @@ namespace Dynamo.Graph.Nodes.ZeroTouch
             Controller.SyncNodeWithDefinition(this);
         }
 
-        internal override IEnumerable<AssociativeNode> BuildAst(List<AssociativeNode> inputAstNodes, CompilationContext context)
+        public override IEnumerable<AssociativeNode> BuildAst(List<AssociativeNode> inputAstNodes, CompilationContext context)
         {
             return Controller.BuildAst(this, inputAstNodes);
         }

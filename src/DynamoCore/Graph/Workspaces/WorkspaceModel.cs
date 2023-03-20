@@ -1066,7 +1066,7 @@ namespace Dynamo.Graph.Workspaces
         /// and recreating itself has to occur outside of it.
         /// </summary>
         /// <param name="connectorModel"></param>
-        internal void ClearConnector(ConnectorModel connectorModel)
+        public void ClearConnector(ConnectorModel connectorModel)
         {
             RecordAndDeleteModels(
                new List<ModelBase>() { connectorModel });
